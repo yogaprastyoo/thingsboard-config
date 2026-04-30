@@ -1,0 +1,29 @@
+{
+  "entityType" : "ASSET",
+  "entity" : {
+    "additionalInfo" : {
+      "description" : ""
+    },
+    "assetProfileId" : {
+      "entityType" : "ASSET_PROFILE",
+      "id" : "fa5728f0-185c-11f1-823d-eb8ec601764f"
+    },
+    "customerId" : {
+      "entityType" : "CUSTOMER",
+      "id" : "64a82940-395d-11f1-bb23-5b97731d0f0e"
+    },
+    "externalId" : null,
+    "id" : {
+      "entityType" : "ASSET",
+      "id" : "24e38900-185e-11f1-823d-eb8ec601764f"
+    },
+    "label" : "Budi Haryanto",
+    "name" : "patient-001",
+    "type" : "Patient"
+  },
+  "relations" : [ ],
+  "attributes" : {
+    "SERVER_SCOPE" : [ ]
+  },
+  "calculatedFields" : [ ]
+}

@@ -1,0 +1,386 @@
+{
+  "entityType" : "RULE_CHAIN",
+  "entity" : {
+    "additionalInfo" : {
+      "description" : ""
+    },
+    "configuration" : null,
+    "debugMode" : false,
+    "externalId" : null,
+    "firstRuleNodeId" : {
+      "entityType" : "RULE_NODE",
+      "id" : "cc0d6200-3834-11f1-bb23-5b97731d0f0e"
+    },
+    "id" : {
+      "entityType" : "RULE_CHAIN",
+      "id" : "cbed08c0-3834-11f1-bb23-5b97731d0f0e"
+    },
+    "name" : "Health Status Label - Email Alert with AI Response",
+    "root" : false,
+    "type" : "CORE"
+  },
+  "metaData" : {
+    "connections" : [ {
+      "fromIndex" : 0,
+      "toIndex" : 8,
+      "type" : "Post attributes"
+    }, {
+      "fromIndex" : 0,
+      "toIndex" : 8,
+      "type" : "Post telemetry"
+    }, {
+      "fromIndex" : 1,
+      "toIndex" : 2,
+      "type" : "Success"
+    }, {
+      "fromIndex" : 2,
+      "toIndex" : 3,
+      "type" : "Success"
+    }, {
+      "fromIndex" : 3,
+      "toIndex" : 4,
+      "type" : "True"
+    }, {
+      "fromIndex" : 4,
+      "toIndex" : 6,
+      "type" : "True"
+    }, {
+      "fromIndex" : 5,
+      "toIndex" : 1,
+      "type" : "Failure"
+    }, {
+      "fromIndex" : 5,
+      "toIndex" : 1,
+      "type" : "Success"
+    }, {
+      "fromIndex" : 6,
+      "toIndex" : 9,
+      "type" : "Success"
+    }, {
+      "fromIndex" : 8,
+      "toIndex" : 5,
+      "type" : "Success"
+    }, {
+      "fromIndex" : 9,
+      "toIndex" : 10,
+      "type" : "Success"
+    }, {
+      "fromIndex" : 10,
+      "toIndex" : 7,
+      "type" : "Success"
+    } ],
+    "firstNodeIndex" : 0,
+    "nodes" : [ {
+      "additionalInfo" : {
+        "layoutX" : 282,
+        "layoutY" : 154
+      },
+      "configuration" : {
+        "version" : 0
+      },
+      "configurationVersion" : 0,
+      "createdTime" : 0,
+      "debugSettings" : null,
+      "externalId" : null,
+      "id" : {
+        "entityType" : "RULE_NODE",
+        "id" : "cc0d6200-3834-11f1-bb23-5b97731d0f0e"
+      },
+      "name" : "Input",
+      "queueName" : null,
+      "ruleChainId" : null,
+      "singletonMode" : false,
+      "type" : "org.thingsboard.rule.engine.filter.TbMsgTypeSwitchNode"
+    }, {
+      "additionalInfo" : {
+        "description" : null,
+        "layoutX" : 676,
+        "layoutY" : 153
+      },
+      "configuration" : {
+        "scriptLang" : "JS",
+        "jsScript" : "var spo2 = msg.spo2;\nvar rr   = msg.respiratory_rate;\nvar temp = msg.temperature;\nvar hr   = msg.heart_rate;\nvar sys  = msg.systolic_bp;\nvar dia  = msg.diastolic_bp;\n\nvar prev = metadata.ss_status_label;\nif (prev == null || prev == \"\") {\n    prev = \"UNKNOWN\";\n}\n\nvar label = \"STABLE\";\n\n// ============================================================\n// HIERARKI STATUS (urutan = prioritas)\n// ============================================================\n\n// --- 1. CRITICAL ---\n// SpO2 sangat rendah ATAU napas sangat cepat\nif (spo2 != null && ((spo2 <= 88 && prev != \"CRITICAL\") || (spo2 < 90 && prev == \"CRITICAL\"))) {\n    label = \"CRITICAL\";\n}\nelse if (rr != null && ((rr > 30 && prev != \"CRITICAL\") || (rr > 28 && prev == \"CRITICAL\"))) {\n    label = \"CRITICAL\";\n}\n\n// --- 2. HYPOXIA ---\n// SpO2 rendah + napas cepat (belum separah CRITICAL)\nelse if (spo2 != null && rr != null &&\n    ((spo2 < 92 && rr >= 24 && prev != \"HYPOXIA\") ||\n     (prev == \"HYPOXIA\" && spo2 < 94))) {\n    label = \"HYPOXIA\";\n}\n\n// --- 3. FEVER ---\n// Suhu tinggi + detak jantung cepat\nelse if (temp != null && hr != null && temp >= 38.0 && hr >= 85) {\n    label = \"FEVER\";\n}\n\n// --- 4. HYPERTENSION ---\n// Tekanan darah tinggi\nelse if ((sys != null && sys >= 140) || (dia != null && dia >= 90)) {\n    label = \"HYPERTENSION\";\n}\n\n// --- 5. HYPOTENSION ---\n// Tekanan darah terlalu rendah (bahaya syok)\nelse if (sys != null && sys < 90) {\n    label = \"HYPOTENSION\";\n}\n\n// --- 6. ARRHYTHMIA ---\n// Detak jantung terlalu lambat (bradikardi) atau terlalu cepat (takikardi)\n// tanpa penjelasan dari kondisi lain (demam/hipoksia sudah dihandle di atas)\nelse if (hr != null && (hr < 50 || hr > 110)) {\n    label = \"ARRHYTHMIA\";\n}\n\n// --- 7. UNSTABLE ---\n// Tanda awal perburukan: salah satu parameter mulai keluar batas normal\nelse if (function() {\n    var count = 0;\n    if (rr   != null && rr   > 20)                   count++;\n    if (spo2 != null && spo2 >= 92 && spo2 < 95)     count++;\n    if (temp != null && temp >= 37.5 && temp < 38.0) count++;\n    if (sys  != null && sys  >= 130 && sys  < 140)   count++;\n    if (dia  != null && dia  >= 85  && dia  < 90)    count++;\n    return count >= 2; // minimal 2 parameter bermasalah\n}()) {\n    label = \"UNSTABLE\";\n}\n\n// --- 8. STABLE ---\n// Semua parameter dalam batas normal\nelse if (\n    hr   != null && hr   >= 60  && hr   <= 100 &&\n    spo2 != null && spo2 >= 95  &&\n    rr   != null && rr   >= 12  && rr   <= 20  &&\n    temp != null && temp >= 36.1 && temp <= 37.5 &&\n    (sys == null || (sys >= 90 && sys < 130)) &&\n    (dia == null || (dia >= 60 && dia < 85))\n) {\n    label = \"STABLE\";\n}\n\n// ============================================================\n// FILTER PERUBAHAN & KIRIM\n// ============================================================\nif (label != prev) {\n    metadata.newStatusLabel = label;\n    metadata.currentTemp    = temp != null ? temp + \"°C\"       : \"N/A\";\n    metadata.currentSpO2    = spo2 != null ? spo2 + \"%\"        : \"N/A\";\n    metadata.currentHR      = hr   != null ? hr   + \" bpm\"     : \"N/A\";\n    metadata.currentRR      = rr   != null ? rr   + \" x/menit\" : \"N/A\";\n    metadata.deviceName     = metadata.deviceName  || \"Unknown Device\";\n    metadata.patientName    = metadata.patientName || metadata.deviceName;\n\n    var newMsg = { \"status_label\": label };\n    return { msg: newMsg, metadata: metadata, msgType: 'POST_ATTRIBUTES_REQUEST' };\n}\n\nreturn { msg: null };",
+        "tbelScript" : ""
+      },
+      "configurationVersion" : 0,
+      "createdTime" : 0,
+      "debugSettings" : {
+        "allEnabled" : false,
+        "allEnabledUntil" : 1769649619305,
+        "failuresEnabled" : true
+      },
+      "externalId" : null,
+      "id" : {
+        "entityType" : "RULE_NODE",
+        "id" : "cc0d6201-3834-11f1-bb23-5b97731d0f0e"
+      },
+      "name" : "Health Logic",
+      "queueName" : null,
+      "ruleChainId" : null,
+      "singletonMode" : false,
+      "type" : "org.thingsboard.rule.engine.transform.TbTransformMsgNode"
+    }, {
+      "additionalInfo" : {
+        "description" : null,
+        "layoutX" : 684,
+        "layoutY" : 262
+      },
+      "configuration" : {
+        "processingSettings" : {
+          "type" : "DEDUPLICATE",
+          "deduplicationIntervalSecs" : 5
+        },
+        "scope" : "SERVER_SCOPE",
+        "notifyDevice" : true,
+        "sendAttributesUpdatedNotification" : false,
+        "updateAttributesOnlyOnValueChange" : true
+      },
+      "configurationVersion" : 3,
+      "createdTime" : 0,
+      "debugSettings" : {
+        "allEnabled" : false,
+        "allEnabledUntil" : 1769649619305,
+        "failuresEnabled" : true
+      },
+      "externalId" : null,
+      "id" : {
+        "entityType" : "RULE_NODE",
+        "id" : "cc0d8910-3834-11f1-bb23-5b97731d0f0e"
+      },
+      "name" : "Save Label",
+      "queueName" : null,
+      "ruleChainId" : null,
+      "singletonMode" : false,
+      "type" : "org.thingsboard.rule.engine.telemetry.TbMsgAttributesNode"
+    }, {
+      "additionalInfo" : {
+        "description" : "",
+        "layoutX" : 724,
+        "layoutY" : 376
+      },
+      "configuration" : {
+        "scriptLang" : "TBEL",
+        "jsScript" : "return msg.temperature > 20;",
+        "tbelScript" : "var s = metadata.newStatusLabel;\nif (s == null) return false;\nif (s == \"STABLE\" || s == \"UNKNOWN\" || s == \"UNSTABLE\") return false;\nreturn true;"
+      },
+      "configurationVersion" : 0,
+      "createdTime" : 0,
+      "debugSettings" : {
+        "allEnabled" : false,
+        "allEnabledUntil" : 1769654956034,
+        "failuresEnabled" : true
+      },
+      "externalId" : null,
+      "id" : {
+        "entityType" : "RULE_NODE",
+        "id" : "cc0d8911-3834-11f1-bb23-5b97731d0f0e"
+      },
+      "name" : "Is Not Stable?",
+      "queueName" : null,
+      "ruleChainId" : null,
+      "singletonMode" : false,
+      "type" : "org.thingsboard.rule.engine.filter.TbJsFilterNode"
+    }, {
+      "additionalInfo" : {
+        "description" : "Only proceed if status different from last email",
+        "layoutX" : 1066,
+        "layoutY" : 150
+      },
+      "configuration" : {
+        "scriptLang" : "TBEL",
+        "jsScript" : "",
+        "tbelScript" : "var current = metadata.newStatusLabel;\nvar prev = metadata.ss_status_label;\n\nif (prev == null) return true;\nif (current == prev) return false;\nreturn true;\n"
+      },
+      "configurationVersion" : 0,
+      "createdTime" : 0,
+      "debugSettings" : {
+        "allEnabled" : false,
+        "allEnabledUntil" : 1769655046103,
+        "failuresEnabled" : true
+      },
+      "externalId" : null,
+      "id" : {
+        "entityType" : "RULE_NODE",
+        "id" : "cc0d8912-3834-11f1-bb23-5b97731d0f0e"
+      },
+      "name" : "Status Changed?",
+      "queueName" : null,
+      "ruleChainId" : null,
+      "singletonMode" : false,
+      "type" : "org.thingsboard.rule.engine.filter.TbJsFilterNode"
+    }, {
+      "additionalInfo" : {
+        "description" : "",
+        "layoutX" : 364,
+        "layoutY" : 383
+      },
+      "configuration" : {
+        "tellFailureIfAbsent" : false,
+        "fetchTo" : "METADATA",
+        "clientAttributeNames" : [ ],
+        "sharedAttributeNames" : [ ],
+        "serverAttributeNames" : [ "status_label" ],
+        "latestTsKeyNames" : [ ],
+        "getLatestValueWithTs" : false
+      },
+      "configurationVersion" : 1,
+      "createdTime" : 0,
+      "debugSettings" : {
+        "allEnabled" : false,
+        "allEnabledUntil" : 1769651551231,
+        "failuresEnabled" : true
+      },
+      "externalId" : null,
+      "id" : {
+        "entityType" : "RULE_NODE",
+        "id" : "cc0d8913-3834-11f1-bb23-5b97731d0f0e"
+      },
+      "name" : "Get Device Attributes",
+      "queueName" : null,
+      "ruleChainId" : null,
+      "singletonMode" : false,
+      "type" : "org.thingsboard.rule.engine.metadata.TbGetAttributesNode"
+    }, {
+      "additionalInfo" : {
+        "description" : "",
+        "layoutX" : 1061,
+        "layoutY" : 252
+      },
+      "configuration" : {
+        "interval" : 20,
+        "strategy" : "FIRST",
+        "maxPendingMsgs" : 1,
+        "maxRetries" : 0
+      },
+      "configurationVersion" : 1,
+      "createdTime" : 0,
+      "debugSettings" : {
+        "allEnabled" : false,
+        "allEnabledUntil" : 1769655262683,
+        "failuresEnabled" : true
+      },
+      "externalId" : null,
+      "id" : {
+        "entityType" : "RULE_NODE",
+        "id" : "cc0db020-3834-11f1-bb23-5b97731d0f0e"
+      },
+      "name" : "dup",
+      "queueName" : "Main",
+      "ruleChainId" : null,
+      "singletonMode" : false,
+      "type" : "org.thingsboard.rule.engine.deduplication.TbMsgDeduplicationNode"
+    }, {
+      "additionalInfo" : {
+        "description" : "",
+        "layoutX" : 1730,
+        "layoutY" : 323
+      },
+      "configuration" : {
+        "templateId" : {
+          "entityType" : "NOTIFICATION_TEMPLATE",
+          "id" : "ce1c5290-3839-11f1-bb23-5b97731d0f0e"
+        },
+        "targets" : [ "f4f48841-1851-11f1-823d-eb8ec601764f", "f4f3c4f0-1851-11f1-823d-eb8ec601764f" ]
+      },
+      "configurationVersion" : 0,
+      "createdTime" : 0,
+      "debugSettings" : null,
+      "externalId" : null,
+      "id" : {
+        "entityType" : "RULE_NODE",
+        "id" : "cc0db021-3834-11f1-bb23-5b97731d0f0e"
+      },
+      "name" : "Send Notification AI",
+      "queueName" : null,
+      "ruleChainId" : null,
+      "singletonMode" : false,
+      "type" : "org.thingsboard.rule.engine.notification.TbNotificationNode"
+    }, {
+      "additionalInfo" : {
+        "description" : "Ambil label device sebagai nama pasien",
+        "layoutX" : 327,
+        "layoutY" : 273
+      },
+      "configuration" : {
+        "fetchTo" : "METADATA",
+        "dataMapping" : {
+          "label" : "patientName"
+        }
+      },
+      "configurationVersion" : 1,
+      "createdTime" : 0,
+      "debugSettings" : null,
+      "externalId" : null,
+      "id" : {
+        "entityType" : "RULE_NODE",
+        "id" : "cc0db022-3834-11f1-bb23-5b97731d0f0e"
+      },
+      "name" : "Get Patient Info",
+      "queueName" : null,
+      "ruleChainId" : null,
+      "singletonMode" : false,
+      "type" : "org.thingsboard.rule.engine.metadata.TbGetOriginatorFieldsNode"
+    }, {
+      "additionalInfo" : {
+        "description" : "",
+        "layoutX" : 1406,
+        "layoutY" : 200
+      },
+      "configuration" : {
+        "modelId" : {
+          "entityType" : "AI_MODEL",
+          "id" : "467191c0-3816-11f1-bb23-5b97731d0f0e"
+        },
+        "systemPrompt" : "You are a medical AI assistant for an inpatient health monitoring system.\nYour response will be read by both medical staff AND non-medical family members.\nWrite in simple, clear Bahasa Indonesia that everyone can understand.\n\nRules:\n- \"analisis\" max 30 words\n- \"rekomendasi\" max 20 words\n- Do NOT mention the patient name\n- ALWAYS include the actual numbers in your response\n- Format numbers like this:\n    SpO2      → \"kadar oksigen X%\"\n    HR        → \"detak jantung X bpm\"\n    Temp      → \"suhu X°C\"\n    RR        → \"napas X kali/menit\"\n- Use simple words:\n    takikardia     → detak jantung terlalu cepat\n    takipnea       → napas terlalu cepat  \n    hipoksemia     → kadar oksigen darah rendah\n    distress napas → kesulitan bernapas\n- Severity context:\n    CRITICAL → very urgent, life threatening\n    HYPOXIA  → oxygen dangerously low, needs immediate help\n\nOutput ONLY the following JSON without any text outside the JSON:\n{\n  \"analisis\": \"condition explanation WITH numbers max 30 words\",\n  \"rekomendasi\": \"action steps WITH specific instructions max 20 words\"\n}",
+        "userPrompt" : "Status       : ${newStatusLabel}\nSpO2         : ${currentSpO2}\nHeart Rate   : ${currentHR}\nTemperature  : ${currentTemp}\nRespiratory  : ${currentRR} breaths/min\n\nAnalyze this patient's vital signs.",
+        "resourceIds" : null,
+        "responseFormat" : {
+          "type" : "JSON"
+        },
+        "timeoutSeconds" : 60,
+        "forceAck" : true
+      },
+      "configurationVersion" : 0,
+      "createdTime" : 0,
+      "debugSettings" : null,
+      "externalId" : null,
+      "id" : {
+        "entityType" : "RULE_NODE",
+        "id" : "723c6cd0-3839-11f1-bb23-5b97731d0f0e"
+      },
+      "name" : "Analyze Patient Condition",
+      "queueName" : null,
+      "ruleChainId" : null,
+      "singletonMode" : false,
+      "type" : "org.thingsboard.rule.engine.ai.TbAiNode"
+    }, {
+      "additionalInfo" : {
+        "description" : "",
+        "layoutX" : 1741,
+        "layoutY" : 120
+      },
+      "configuration" : {
+        "scriptLang" : "JS",
+        "jsScript" : "try {\n    var aiResult = msg;\n    metadata.aiAnalisis    = aiResult.analisis    || \"Analysis unavailable\";\n    metadata.aiRekomendasi = aiResult.rekomendasi || \"Contact medical staff\";\n} catch(e) {\n    metadata.aiAnalisis    = \"Analysis unavailable\";\n    metadata.aiRekomendasi = \"Contact medical staff\";\n}\n\nreturn {msg: msg, metadata: metadata, msgType: msgType};",
+        "tbelScript" : ""
+      },
+      "configurationVersion" : 0,
+      "createdTime" : 0,
+      "debugSettings" : null,
+      "externalId" : null,
+      "id" : {
+        "entityType" : "RULE_NODE",
+        "id" : "723c93e0-3839-11f1-bb23-5b97731d0f0e"
+      },
+      "name" : "Extract AI Result",
+      "queueName" : null,
+      "ruleChainId" : null,
+      "singletonMode" : false,
+      "type" : "org.thingsboard.rule.engine.transform.TbTransformMsgNode"
+    } ],
+    "ruleChainConnections" : null
+  },
+  "attributes" : {
+    "SERVER_SCOPE" : [ ]
+  }
+}
